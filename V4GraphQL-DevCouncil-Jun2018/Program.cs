@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Json;
 using System.Net.Http;
 using System.Text;
@@ -14,7 +15,19 @@ namespace NetCoreV4Samples
 
 		public static async Task MainAsync()
 		{
-			await readAllTransactions();
+			try
+			{
+				//await readAllTransactions();
+				//await readOneTransaction("djQuMToxMjMxNDY1NzkyMTAzODQ6ODAyNzFlZGQ4YQ:2");
+				//await readAllBillTransactions();
+				await createBillTransaction();
+				//await updateBillTransaction("djQuMToxMjMxNDY1NzkyMTAzODQ6ODAyNzFlZGQ4YQ:18");
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine($"Error calling Intuit APIs: {ex.Message}");
+			}
+			finally { }
 		}
 
 		private static async Task readAllTransactions()
@@ -22,10 +35,14 @@ namespace NetCoreV4Samples
 			try
 			{
 				Console.WriteLine("***Started Reading All Transactions***");
-				string transactionsReadAllGraphQl = System.IO.File.ReadAllText("IntuitGraphQL/transactions-read-all.json");
-				JsonValue jsonResponse = await executeIntuitGraphQLRequest(transactionsReadAllGraphQl, "");
-				foreach (JsonObject transaction in jsonResponse["data"]["company"]["transactions"]["edges"]){
-					Console.WriteLine($"Read a transaction with type {transaction["type"]}");
+				var transactionsReadAllQuery = File.ReadAllText("IntuitGraphQL/transactions-read-all-query.graphql");
+				JsonValue jsonResponse = await executeIntuitGraphQLRequest(transactionsReadAllQuery, "");
+				foreach (JsonObject transaction in jsonResponse["data"]["company"]["transactions"]["edges"])
+				{
+					var transactionsNode = transaction["node"];
+					var transactionsBalance = transactionsNode["traits"]["balance"];
+					Console.WriteLine($"Read a transaction with type {transactionsNode["type"]} " +
+									  $"with a balance of {transactionsBalance["balance"]} due on {transactionsBalance["dueDate"]}");
 				}
 			}
 			catch (Exception ex) { throw ex; }
@@ -42,16 +59,18 @@ namespace NetCoreV4Samples
 				Console.WriteLine("***Started Executing Intuit GraphQL Request***");
 				var httpClient = new HttpClient();
 				httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {getIntuitBearerToken()}");
-				var content = $"{{\"query\":{JsonConvert.ToString(graphQl)},\"variables\":null}}";
+				var content = $"{{\"query\":{encodeGraphPayload(graphQl)},\"variables\":{encodeGraphPayload(variables)}}}";
 				var httpContent = new StringContent(content, Encoding.UTF8, "application/json");
 				var httpResponse = await httpClient.PostAsync(intuitGraphQlEndpoint, httpContent);
 				if (httpResponse.StatusCode != System.Net.HttpStatusCode.OK) { throw new Exception("Non-200 status code returned from API call"); }
 				var httpResponseContent = await httpResponse.Content.ReadAsStringAsync();
-				return JsonValue.Parse(httpResponseContent);
+				var jsonResponse = JsonValue.Parse(httpResponseContent);
+				if (!jsonResponse.ContainsKey("data") || jsonResponse.ContainsKey("errors")) { throw new Exception("Error returned in JSON response"); }
+				return jsonResponse;
 			}
 			catch (Exception ex)
 			{
-				throw ex;
+				throw new Exception($"Error calling Intuit GraphQL API: {ex.Message}");
 			}
 			finally
 			{
@@ -59,83 +78,232 @@ namespace NetCoreV4Samples
 			}
 		}
 
+		private static async Task readOneTransaction(string id)
+		{
+			try
+			{
+				Console.WriteLine("***Started Reading One Transaction***");
+				var transactionsReadOneQuery = File.ReadAllText("IntuitGraphQL/transactions-read-one-query.graphql");
+				var transactionsBillFieldsFragment = File.ReadAllText("IntuitGraphQL/transactions-bill-fields-fragment.graphql");
+				JsonValue jsonResponse = await executeIntuitGraphQLRequest(transactionsReadOneQuery + transactionsBillFieldsFragment, $"{{\"id\": \"{id}\"}}");
+				var transactionNode = jsonResponse["data"]["node"];
+				var vendorId = transactionNode["header"]["contact"]["profiles"]["vendor"]["contact"]["id"];
+				var balance = transactionNode["traits"]["balance"]["balance"];
+				var dueDate = transactionNode["traits"]["balance"]["dueDate"];
+				Console.WriteLine($"Read Bill with an ID of {id}, and found a balance of {balance} due on {dueDate}");
+			}
+			catch (Exception ex) { throw ex; }
+			finally
+			{
+				Console.WriteLine("***Finished Reading One Transaction***");
+			}
+		}
+
+		private static async Task readAllBillTransactions()
+		{
+			try
+			{
+				Console.WriteLine("***Started Reading All Transactions***");
+				var transactionsReadAllQuery = File.ReadAllText("IntuitGraphQL/transactions-read-all-bills-query.graphql");
+				JsonValue jsonResponse = await executeIntuitGraphQLRequest(transactionsReadAllQuery, "");
+				foreach (JsonObject transaction in jsonResponse["data"]["company"]["transactions"]["edges"])
+				{
+					var transactionsNode = transaction["node"];
+					var transactionsBalance = transactionsNode["traits"]["balance"];
+					var vendorId = transactionsNode["header"]["contact"]["profiles"]["vendor"]["contact"]["id"];
+					Console.WriteLine($"Read a transaction with type {transactionsNode["type"]} " +
+									  $"with a balance of {transactionsBalance["balance"]} due on {transactionsBalance["dueDate"]}" +
+									  $"for a vendor with an ID of {vendorId}");
+				}
+			}
+			catch (Exception ex) { throw ex; }
+			finally
+			{
+				Console.WriteLine("***Finished Reading All Transactions***");
+			}
+		}
+
+		private static async Task createBillTransaction()
+		{
+			try
+			{
+				Console.WriteLine("***Started Creating Bill Transaction***");
+				var transactionsCreateMutation = File.ReadAllText("IntuitGraphQL/transactions-create-mutation.graphql");
+				var transactionMutationInput = getBillCreateMutationInputJson();
+				JsonValue jsonResponse = await executeIntuitGraphQLRequest(transactionsCreateMutation, transactionMutationInput);
+				var transactionsNode = jsonResponse["data"]["createTransactions_Transaction"]["transactionsTransactionEdge"]["node"];
+				Console.WriteLine($"Created a bill for a transaction on {transactionsNode["header"]["txnDate"]} for the amount of {transactionsNode["header"]["amount"]}");
+			}
+			catch (Exception ex)
+			{
+				throw ex;
+			}
+			finally
+			{
+				Console.WriteLine("***Finished Creating Bill Transaction***");
+			}
+		}
+
+		private static string getBillCreateMutationInputJson()
+		{
+			var clientMutationId = System.Guid.NewGuid().ToString();
+			StringBuilder stringBuilder = new StringBuilder();
+			StringWriter stringWriter = new StringWriter(stringBuilder);
+			using (JsonWriter writer = new JsonTextWriter(stringWriter))
+			{
+				writer.Formatting = Formatting.Indented;
+				writer.WriteStartObject();
+				writer.WritePropertyName("transactions_create");
+				writer.WriteStartObject();
+				writer.WritePropertyName("clientMutationId");
+				writer.WriteValue(clientMutationId);
+				writer.WritePropertyName("transactionsTransaction");
+				writer.WriteStartObject();
+				writer.WritePropertyName("type");
+				writer.WriteValue("PURCHASE_BILL");
+				writer.WritePropertyName("header");
+				writer.WriteStartObject();
+				writer.WritePropertyName("privateMemo");
+				writer.WriteValue("Vendor rep: Paul C.");
+				writer.WritePropertyName("referenceNumber");
+				writer.WriteValue("87y234587gh48057y");
+				writer.WritePropertyName("amount");
+				writer.WriteValue("999.00");
+				writer.WritePropertyName("txnDate");
+				writer.WriteValue("2018-06-20");
+				writer.WritePropertyName("contact");
+				writer.WriteStartObject();
+				writer.WritePropertyName("id");
+				writer.WriteValue("3");
+				writer.WriteEndObject();
+				writer.WriteEndObject();
+				writer.WritePropertyName("lines");
+				writer.WriteStartObject();
+				writer.WritePropertyName("itemLines");
+				writer.WriteStartObject();
+				writer.WritePropertyName("amount");
+				writer.WriteValue("999.00");
+				writer.WritePropertyName("description");
+				writer.WriteValue("Hardware");
+				writer.WritePropertyName("traits");
+				writer.WriteStartObject();
+				writer.WritePropertyName("item");
+				writer.WriteStartObject();
+				writer.WritePropertyName("quantity");
+				writer.WriteValue("1");
+				writer.WritePropertyName("rate");
+				writer.WriteValue("999.00");
+				writer.WritePropertyName("item");
+				writer.WriteStartObject();
+				writer.WritePropertyName("id");
+				writer.WriteValue("djQuMToxMjMxNDc1MDc5NzI4MTQ6MTEyZGU3NDY5OQ:3");
+				writer.WriteEndObject();
+				writer.WriteEndObject();
+				writer.WriteEndObject();
+				writer.WriteEndObject();
+				writer.WriteEndObject();
+				writer.WriteEndObject();
+			}
+			return stringBuilder.ToString();
+		}
+
+		private static async Task updateBillTransaction(string id)
+		{
+			try
+			{
+				Console.WriteLine("***Started Updating Bill Transaction***");
+				var transactionsUpdateMutation = File.ReadAllText("IntuitGraphQL/transactions-update-mutation.graphql");
+				var transactionMutationInput = getBillUpdateMutationInputJson(id);
+				JsonValue jsonResponse = await executeIntuitGraphQLRequest(transactionsUpdateMutation, transactionMutationInput);
+				var transactionsNode = jsonResponse["data"]["updateTransactions_Transaction"]["transactionsTransaction"];
+				Console.WriteLine($"Updated a bill for a transaction on {transactionsNode["header"]["txnDate"]} for the amount of {transactionsNode["header"]["amount"]}");
+			}
+			catch (Exception ex)
+			{
+				throw ex;
+			}
+			finally
+			{
+				Console.WriteLine("***Finished Updating Bill Transaction***");
+			}
+		}
+
+		private static string getBillUpdateMutationInputJson(string id)
+		{
+			var clientMutationId = System.Guid.NewGuid().ToString();
+			StringBuilder stringBuilder = new StringBuilder();
+			StringWriter stringWriter = new StringWriter(stringBuilder);
+			using (JsonWriter writer = new JsonTextWriter(stringWriter))
+			{
+				writer.Formatting = Formatting.Indented;
+				writer.WriteStartObject();
+				writer.WritePropertyName("transactions_update");
+				writer.WriteStartObject();
+				writer.WritePropertyName("clientMutationId");
+				writer.WriteValue(clientMutationId);
+				writer.WritePropertyName("transactionsTransaction");
+				writer.WriteStartObject();
+				writer.WritePropertyName("type");
+				writer.WriteValue("PURCHASE_BILL");
+				writer.WritePropertyName("header");
+				writer.WriteStartObject();
+				writer.WritePropertyName("privateMemo");
+				writer.WriteValue("Vendor rep: Paul C.");
+				writer.WritePropertyName("referenceNumber");
+				writer.WriteValue("87y234587gh48057y");
+				writer.WritePropertyName("amount");
+				writer.WriteValue("999.00");
+				writer.WritePropertyName("txnDate");
+				writer.WriteValue("2018-07-20");
+				writer.WritePropertyName("contact");
+				writer.WriteStartObject();
+				writer.WritePropertyName("id");
+				writer.WriteValue("3");
+				writer.WriteEndObject();
+				writer.WriteEndObject();
+				writer.WritePropertyName("lines");
+				writer.WriteStartObject();
+				writer.WritePropertyName("itemLines");
+				writer.WriteStartObject();
+				writer.WritePropertyName("amount");
+				writer.WriteValue("999.00");
+				writer.WritePropertyName("description");
+				writer.WriteValue("Hardware");
+				writer.WritePropertyName("traits");
+				writer.WriteStartObject();
+				writer.WritePropertyName("item");
+				writer.WriteStartObject();
+				writer.WritePropertyName("quantity");
+				writer.WriteValue("1");
+				writer.WritePropertyName("rate");
+				writer.WriteValue("999.00");
+				writer.WritePropertyName("item");
+				writer.WriteStartObject();
+				writer.WritePropertyName("id");
+				writer.WriteValue("djQuMToxMjMxNDc1MDc5NzI4MTQ6MTEyZGU3NDY5OQ:3");
+				writer.WriteEndObject();
+				writer.WriteEndObject();
+				writer.WriteEndObject();
+				writer.WriteEndObject();
+				writer.WriteEndObject();
+				writer.WriteEndObject();
+			}
+			return stringBuilder.ToString();
+		}
 
 		private static string getIntuitBearerToken()
 		{
-			return "eyJlbmMiOiJBMTI4Q0JDLUhTMjU2IiwiYWxnIjoiZGlyIn0..mO-WmCoPIkf2d0TZwk3Zfw.evZSbLUCoBEemZOPR3RxhHl3oOnr77_SkE700Ca0xW7zDh48oa45WCy4i_ZFcT-DQyoai5Mur-Z60911ttgj94hLDC7FUxDEi_MSYo28aurLQswAgYki6RXGFQmJDbDGIhBj8aCuXltQ1VT3R3KV03LsdKTcWXB_WQMKAWYNeq1_Zinb8P8umWv3I7eOuM9IGusrUWpKamN2eU3XYTJ9zrmI6YHIUjz9g2U8DM2JQn6VZ8huqyNyRwuOIasXMWPFBMIqQJOxfnD5KwQtmTGdjzm_QD7mJGySUlBoLmGZ2b2RQsfd9lye5pr6Z3uObc1a2WUK6lUFg2HyB8a2HcexKE64Hp6N1BqxejGar_62uISXicYz6vcBk_F8EpOHDiu-lGjdkIiES-kl_WHWqoEUNuGUj44NCk4LMxyjBHT99kyYFU8PBge1izl4dCa0gvdlhGwXToYJJi14IuVqoetjLwH8ZzKGUPlAyEmRJjab4iTKvN3bBE8ha3ZaaFqdeL2jcS4JxXhHCQ8us3XrWriShd5VpAxpFI9sqvRoq3QD90-Vr5pnh63nAvaodMaboPr8a5sL4bbfxzS6_X_XhBVEBywEEyLSjAucIEv4t4lTV-GhGotPnZOfPV0REXmhjybbiR-ulhJhjCD2CWfAapbqjl3Uydu4qJCY_aEd96LxYIckMgBY0tuzU_IR8BVJZ8-N.Xmy1SmOuffXPbsJWa4awpw";
+			return File.ReadAllText("Auth/danger-do-not-use.txt"); ;
 		}
 
-
-
-
-		private static async Task getEmployeeCompensation(HttpClient httpClient, String graphQlUrl)
-		{
-			try
-			{
-				Console.WriteLine("***Performing V4 Employee Compensation Query***");
-				const string employeeCompensationQuery = "{\"query\":\"query {\\n  company {\\n    employeeContacts {\\n      edges {\\n        node {\\n          id\\n          person {\\n            givenName\\n          }\\n          profiles {\\n            employee {\\n              compensations {\\n                edges {\\n                  node {\\n                    id\\n                    amount\\n                    employerCompensation {\\n                      name\\n                    }\\n                  }\\n                }\\n              }\\n            }\\n          }\\n        }\\n      }\\n    }\\n  }\\n} \"}";
-				StringContent queryString = new StringContent(employeeCompensationQuery, Encoding.UTF8, "application/json");
-				var response = await httpClient.PostAsync(graphQlUrl, queryString);
-				if (response.StatusCode != System.Net.HttpStatusCode.OK) { throw new Exception("Non-200 status code returned from API call"); }
-				var responseContent = await response.Content.ReadAsStringAsync();
-				JsonValue jsonResponse = JsonValue.Parse(responseContent);
-				if (!jsonResponse.ContainsKey("data") || jsonResponse.ContainsKey("errors")) { throw new Exception("Error returned in JSON response"); }
-				foreach (JsonObject employeeEdge in jsonResponse["data"]["company"]["employeeContacts"]["edges"])
-				{
-					JsonValue employeeNode = employeeEdge["node"];
-					var employeeId = (string)employeeNode["id"];
-					var employeeName = (string)employeeNode["person"]["givenName"];
-					foreach (JsonObject compensationEdge in employeeNode["profiles"]["employee"]["compensations"]["edges"])
-					{
-						JsonValue compensationNode = compensationEdge["node"];
-						var compensationId = (string)compensationNode["id"];
-						var compensationName = (string)compensationNode["employerCompensation"]["name"];
-						var compensationAmount = compensationNode["amount"] == null ? 0 : Double.Parse((string)compensationNode["amount"]);
-						Console.WriteLine($"Employee {employeeName} with ID {employeeId} has the compensation {compensationName} with the ID {compensationId} and current amount of ${compensationAmount}");
-					}
-				}
-				Console.WriteLine("***V4 Employee Compensation Query Success***");
-			}
-			catch (Exception ex)
-			{
-				Console.WriteLine($"***Error calling Employee Compensation API: {ex.Message}***");
-			}
-			Console.WriteLine("");
-		}
-
-
-		private static async Task getEmployerCompensation(HttpClient httpClient, String graphQlUrl)
-		{
-			try
-			{
-				Console.WriteLine("***Performing V4 Employer Compensation Query***");
-				const string employerCompensationQuery = "{\"query\":\"query {\\n company {\\n companyInfo {\\n employerInfo {\\n compensations {\\n edges {\\n node {\\n id\\n name\\n statutoryCompensationPolicy\\n            }\\n          }\\n        }\\n      }\\n    }\\n  }\\n} \",\"variables\":null}";
-				StringContent queryString = new StringContent(employerCompensationQuery, Encoding.UTF8, "application/json");
-				var response = await httpClient.PostAsync(graphQlUrl, queryString);
-				if (response.StatusCode != System.Net.HttpStatusCode.OK) { throw new Exception("Non-200 status code returned from API call"); }
-				var responseContent = await response.Content.ReadAsStringAsync();
-				JsonValue jsonResponse = JsonValue.Parse(responseContent);
-				if (!jsonResponse.ContainsKey("data") || jsonResponse.ContainsKey("errors")) { throw new Exception("Error returned in JSON response"); }
-				foreach (JsonObject employeerCompensationEdge in jsonResponse["data"]["company"]["companyInfo"]["employerInfo"]["compensations"]["edges"])
-				{
-					JsonValue employeerCompensationNode = employeerCompensationEdge["node"];
-					var compensationId = (string)employeerCompensationNode["id"];
-					var compensationName = (string)employeerCompensationNode["name"];
-					var compensationPolicy = (string)employeerCompensationNode["statutoryCompensationPolicy"];
-					Console.WriteLine($"Employer has compensation {compensationName} with ID {compensationId} and policy {compensationPolicy}");
-				}
-				Console.WriteLine("***V4 Employer Compensation Query Success***");
-			}
-			catch (Exception ex)
-			{
-				Console.WriteLine($"***Error calling Employer Compensation API: {ex.Message}***");
-			}
-			Console.WriteLine("");
-		}
 
 		static void Main()
 		{
 			MainAsync().Wait();
+		}
+
+		private static string encodeGraphPayload(string payload){
+			return JsonConvert.ToString(payload);
 		}
 
 	}

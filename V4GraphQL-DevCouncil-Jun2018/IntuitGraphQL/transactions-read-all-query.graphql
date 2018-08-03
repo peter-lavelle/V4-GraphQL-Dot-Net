@@ -1,0 +1,32 @@
+﻿query TransactionsReadAll {
+  company {
+    transactions {
+      edges {
+        node {
+          id
+          type
+          header {
+            contact {
+              profiles {
+                vendor {
+                  contact {
+                    id
+                  }
+                }
+              }
+            }
+          }
+          externalIds {
+            localId
+          }
+          traits {
+            balance {
+              balance
+              dueDate
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,9 +1,11 @@
-﻿query TransactionsReadAll {
+﻿query TransactionsFilter {
   company {
-    transactions {
+    transactions(filterBy: "type='PURCHASE_BILL'")
+    {
       edges {
         node {
-          id type
+          id 
+          type
           header {
             contact {
               profiles {
@@ -20,7 +22,8 @@
           }
           traits {
             balance {
-              balance dueDate
+              balance 
+              dueDate
             }
           }
         }

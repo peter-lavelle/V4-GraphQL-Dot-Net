@@ -1,0 +1,14 @@
+﻿mutation TransactionsUpdate($transactions_update: UpdateTransactions_TransactionInput!) {
+  updateTransactions_Transaction(input: $transactions_update)
+  {
+    clientMutationId transactionsTransaction
+    {
+      id 
+      header
+      {
+        amount 
+        txnDate
+      }
+    }
+  }
+}

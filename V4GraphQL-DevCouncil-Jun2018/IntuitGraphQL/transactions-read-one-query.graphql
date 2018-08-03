@@ -1,0 +1,6 @@
+﻿query TransactionsReadOne($id: ID!) {
+  node(id: $id)
+  {
+    ...transactionFields
+  }
+}

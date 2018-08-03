@@ -42,14 +42,33 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="IntuitGraphQL\" />
+    <Folder Include="Auth\" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="IntuitGraphQL\transactions-read-all.json">
+    <Content Include="IntuitGraphQL\transactions-read-all-query.graphql">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+    <None Include="Auth\danger-do-not-use.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="IntuitGraphQL\transactions-read-one-query.graphql">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="IntuitGraphQL\transactions-bill-fields-fragment.graphql">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="IntuitGraphQL\transactions-read-all-bills-query.graphql">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="IntuitGraphQL\transactions-create-mutation.graphql">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="IntuitGraphQL\transactions-update-mutation.graphql">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
 </Project>
