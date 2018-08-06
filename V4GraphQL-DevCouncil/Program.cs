@@ -17,11 +17,11 @@ namespace NetCoreV4Samples
 		{
 			try
 			{
-				//await readAllTransactions();
-				//await readOneTransaction("djQuMToxMjMxNDY1NzkyMTAzODQ6ODAyNzFlZGQ4YQ:2");
-				//await readAllBillTransactions();
-				await createBillTransaction();
-				//await updateBillTransaction("djQuMToxMjMxNDY1NzkyMTAzODQ6ODAyNzFlZGQ4YQ:18");
+				await readAllTransactions();
+				await readOneTransaction("djQuMToxMjMxNDY3MTI2OTQ4OTk6ODAyNzFlZGQ4YQ:2");
+				await readAllBillTransactions();
+				await createBillTransaction("djQuMToxMjMxNDY3MTI2OTQ4OTk6OWQ2OTllOTYwOA:1608e4bc80eb340668e2765d486d971b1", "3");
+				await updateBillTransaction("djQuMToxMjMxNDY3MTI2OTQ4OTk6ODAyNzFlZGQ4YQ:9", "djQuMToxMjMxNDY3MTI2OTQ4OTk6OWQ2OTllOTYwOA:1608e4bc80eb340668e2765d486d971b1", "3");
 			}
 			catch (Exception ex)
 			{
@@ -123,16 +123,16 @@ namespace NetCoreV4Samples
 			}
 		}
 
-		private static async Task createBillTransaction()
+		private static async Task createBillTransaction(string contactId, string itemId)
 		{
 			try
 			{
 				Console.WriteLine("***Started Creating Bill Transaction***");
 				var transactionsCreateMutation = File.ReadAllText("IntuitGraphQL/transactions-create-mutation.graphql");
-				var transactionMutationInput = getBillCreateMutationInputJson();
+				var transactionMutationInput = getBillCreateMutationInputJson(contactId, itemId);
 				JsonValue jsonResponse = await executeIntuitGraphQLRequest(transactionsCreateMutation, transactionMutationInput);
 				var transactionsNode = jsonResponse["data"]["createTransactions_Transaction"]["transactionsTransactionEdge"]["node"];
-				Console.WriteLine($"Created a bill for a transaction on {transactionsNode["header"]["txnDate"]} for the amount of {transactionsNode["header"]["amount"]}");
+				Console.WriteLine($"Created a bill for a transaction '{transactionsNode["id"]}' on {transactionsNode["header"]["txnDate"]} for the amount of {transactionsNode["header"]["amount"]}");
 			}
 			catch (Exception ex)
 			{
@@ -144,7 +144,7 @@ namespace NetCoreV4Samples
 			}
 		}
 
-		private static string getBillCreateMutationInputJson()
+		private static string getBillCreateMutationInputJson(string contactId, string itemId)
 		{
 			var clientMutationId = System.Guid.NewGuid().ToString();
 			StringBuilder stringBuilder = new StringBuilder();
@@ -170,11 +170,11 @@ namespace NetCoreV4Samples
 				writer.WritePropertyName("amount");
 				writer.WriteValue("999.00");
 				writer.WritePropertyName("txnDate");
-				writer.WriteValue("2018-06-20");
+				writer.WriteValue("2018-09-20");
 				writer.WritePropertyName("contact");
 				writer.WriteStartObject();
 				writer.WritePropertyName("id");
-				writer.WriteValue("3");
+				writer.WriteValue(contactId);
 				writer.WriteEndObject();
 				writer.WriteEndObject();
 				writer.WritePropertyName("lines");
@@ -196,7 +196,7 @@ namespace NetCoreV4Samples
 				writer.WritePropertyName("item");
 				writer.WriteStartObject();
 				writer.WritePropertyName("id");
-				writer.WriteValue("djQuMToxMjMxNDc1MDc5NzI4MTQ6MTEyZGU3NDY5OQ:3");
+				writer.WriteValue(itemId);
 				writer.WriteEndObject();
 				writer.WriteEndObject();
 				writer.WriteEndObject();
@@ -207,13 +207,13 @@ namespace NetCoreV4Samples
 			return stringBuilder.ToString();
 		}
 
-		private static async Task updateBillTransaction(string id)
+		private static async Task updateBillTransaction(string id, string contactId, string itemId)
 		{
 			try
 			{
 				Console.WriteLine("***Started Updating Bill Transaction***");
 				var transactionsUpdateMutation = File.ReadAllText("IntuitGraphQL/transactions-update-mutation.graphql");
-				var transactionMutationInput = getBillUpdateMutationInputJson(id);
+				var transactionMutationInput = getBillUpdateMutationInputJson(id, contactId, itemId);
 				JsonValue jsonResponse = await executeIntuitGraphQLRequest(transactionsUpdateMutation, transactionMutationInput);
 				var transactionsNode = jsonResponse["data"]["updateTransactions_Transaction"]["transactionsTransaction"];
 				Console.WriteLine($"Updated a bill for a transaction on {transactionsNode["header"]["txnDate"]} for the amount of {transactionsNode["header"]["amount"]}");
@@ -228,7 +228,7 @@ namespace NetCoreV4Samples
 			}
 		}
 
-		private static string getBillUpdateMutationInputJson(string id)
+		private static string getBillUpdateMutationInputJson(string id, string contactId, string itemId)
 		{
 			var clientMutationId = System.Guid.NewGuid().ToString();
 			StringBuilder stringBuilder = new StringBuilder();
@@ -243,6 +243,8 @@ namespace NetCoreV4Samples
 				writer.WriteValue(clientMutationId);
 				writer.WritePropertyName("transactionsTransaction");
 				writer.WriteStartObject();
+                writer.WritePropertyName("id");
+                writer.WriteValue(id);
 				writer.WritePropertyName("type");
 				writer.WriteValue("PURCHASE_BILL");
 				writer.WritePropertyName("header");
@@ -252,13 +254,13 @@ namespace NetCoreV4Samples
 				writer.WritePropertyName("referenceNumber");
 				writer.WriteValue("87y234587gh48057y");
 				writer.WritePropertyName("amount");
-				writer.WriteValue("999.00");
+				writer.WriteValue("1099.00");
 				writer.WritePropertyName("txnDate");
-				writer.WriteValue("2018-07-20");
+				writer.WriteValue("2018-09-20");
 				writer.WritePropertyName("contact");
 				writer.WriteStartObject();
 				writer.WritePropertyName("id");
-				writer.WriteValue("3");
+				writer.WriteValue(contactId);
 				writer.WriteEndObject();
 				writer.WriteEndObject();
 				writer.WritePropertyName("lines");
@@ -266,7 +268,7 @@ namespace NetCoreV4Samples
 				writer.WritePropertyName("itemLines");
 				writer.WriteStartObject();
 				writer.WritePropertyName("amount");
-				writer.WriteValue("999.00");
+				writer.WriteValue("1099.00");
 				writer.WritePropertyName("description");
 				writer.WriteValue("Hardware");
 				writer.WritePropertyName("traits");
@@ -276,11 +278,11 @@ namespace NetCoreV4Samples
 				writer.WritePropertyName("quantity");
 				writer.WriteValue("1");
 				writer.WritePropertyName("rate");
-				writer.WriteValue("999.00");
+				writer.WriteValue("1099.00");
 				writer.WritePropertyName("item");
 				writer.WriteStartObject();
 				writer.WritePropertyName("id");
-				writer.WriteValue("djQuMToxMjMxNDc1MDc5NzI4MTQ6MTEyZGU3NDY5OQ:3");
+				writer.WriteValue(itemId);
 				writer.WriteEndObject();
 				writer.WriteEndObject();
 				writer.WriteEndObject();
@@ -293,7 +295,7 @@ namespace NetCoreV4Samples
 
 		private static string getIntuitBearerToken()
 		{
-			return File.ReadAllText("Auth/danger-do-not-use.txt"); ;
+			return File.ReadAllText("Auth/danger-insecure-sample-only.txt"); ;
 		}
 
 

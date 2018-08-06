@@ -51,7 +51,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
-    <None Include="Auth\danger-do-not-use.txt">
+    <None Include="Auth\danger-insecure-sample-only.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="IntuitGraphQL\transactions-read-one-query.graphql">

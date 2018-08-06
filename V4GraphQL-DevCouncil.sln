@@ -1,7 +1,7 @@
 
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 2012
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "V4GraphQL-DevCouncil-Jun2018", "V4GraphQL-DevCouncil-Jun2018\V4GraphQL-DevCouncil-Jun2018.csproj", "{0E3E4289-F5AC-4FA0-9556-8D474FE52049}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "V4GraphQL-DevCouncil", "V4GraphQL-DevCouncil\V4GraphQL-DevCouncil.csproj", "{0E3E4289-F5AC-4FA0-9556-8D474FE52049}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
